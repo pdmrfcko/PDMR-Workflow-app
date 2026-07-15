@@ -809,7 +809,6 @@ function saveNow(){
 async function saveToSupabase(){
   try{
     const key=getSessionKey();
-    // Call the server-side upsert function — no conflict possible
     const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_workflow`,{
       method:"POST",
       headers:{
@@ -819,8 +818,13 @@ async function saveToSupabase(){
       },
       body:JSON.stringify({p_key:key,p_state:S})
     });
-    if(!res.ok){const t=await res.text();console.warn("Supabase save error:",res.status,t);}
-  }catch(e){console.warn("Supabase save failed:",e);}
+    const txt=await res.text();
+    if(!res.ok){
+      alert("SAVE ERROR "+res.status+": "+txt);
+    } else {
+      console.log("Saved OK",res.status);
+    }
+  }catch(e){alert("SAVE EXCEPTION: "+e.message);}
 }
 
 async function loadFromSupabase(){
@@ -836,7 +840,7 @@ async function loadFromSupabase(){
     if(data&&data.length>0&&data[0].state){
       return data[0].state;
     }
-  }catch(e){console.warn("Supabase load failed:",e);}
+  }catch(e){alert("LOAD EXCEPTION: "+e.message);}
   return null;
 }
 
