@@ -809,18 +809,23 @@ function saveNow(){
 async function saveToSupabase(){
   try{
     const key=getSessionKey();
-    // True upsert using on_conflict parameter
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/workflow_state?on_conflict=session_key`,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "apikey":SUPABASE_KEY,
-        "Authorization":`Bearer ${SUPABASE_KEY}`,
-        "Prefer":"resolution=merge-duplicates,return=minimal"
-      },
-      body:JSON.stringify({session_key:key,state:S})
-    });
-    if(!res.ok){const t=await res.text();console.warn("Supabase save:",res.status,t);}
+    // Try PATCH (update) first
+    const patch=await fetch(
+      `${SUPABASE_URL}/rest/v1/workflow_state?session_key=eq.${encodeURIComponent(key)}`,
+      {method:"PATCH",
+       headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Prefer":"return=representation"},
+       body:JSON.stringify({state:S})}
+    );
+    const patched=await patch.json();
+    // If PATCH returned empty array, no row existed — do INSERT
+    if(Array.isArray(patched)&&patched.length===0){
+      const ins=await fetch(`${SUPABASE_URL}/rest/v1/workflow_state`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Prefer":"return=minimal"},
+        body:JSON.stringify({session_key:key,state:S})
+      });
+      if(!ins.ok){const t=await ins.text();console.warn("Supabase insert error:",t);}
+    }
   }catch(e){console.warn("Supabase save failed:",e);}
 }
 
