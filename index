@@ -671,6 +671,19 @@ async function loadAndRender(){
     if(!S.modal)S.modal=null;
     if(!S.modalDraft)S.modalDraft={};
     if(!S.openStep)S.openStep=null;
+    // Save progress before rebuilding structure
+    const savedProgress={};
+    (S.projects||[]).forEach(p=>{
+      (p.seasons||[]).forEach(sn=>{
+        [...(sn.episodes||[]),...(sn.cycles||[])].forEach(e=>{
+          (e.workflows||[]).forEach(w=>{
+            (w.steps||[]).forEach(s=>{
+              if(s.title) savedProgress[s.title]={status:s.status,subs:s.subs,script:s.script};
+            });
+          });
+        });
+      });
+    });
     const freshSeed=JSON.parse(JSON.stringify(SEED));
     S.projects.forEach(p=>{
       if(!p.seriesType)p.seriesType="generic";
@@ -686,6 +699,9 @@ async function loadAndRender(){
               if(!s.script)s.script="";
               if(!s.ver)s.ver="";
               if(!s.status)s.status="not-started";
+              // restore saved progress
+              const saved=savedProgress[s.title];
+              if(saved){s.status=saved.status;if(saved.subs&&saved.subs.length)s.subs=saved.subs;if(saved.script)s.script=saved.script;}
               s.subs.forEach(sub=>{if(!sub.kids)sub.kids=[];if(typeof sub.done==="undefined")sub.done=false;});
             });
           });
@@ -793,16 +809,18 @@ function saveNow(){
 async function saveToSupabase(){
   try{
     const key=getSessionKey();
-    await fetch(`${SUPABASE_URL}/rest/v1/workflow_state`,{
+    // True upsert using on_conflict parameter
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/workflow_state?on_conflict=session_key`,{
       method:"POST",
       headers:{
         "Content-Type":"application/json",
         "apikey":SUPABASE_KEY,
         "Authorization":`Bearer ${SUPABASE_KEY}`,
-        "Prefer":"resolution=merge-duplicates"
+        "Prefer":"resolution=merge-duplicates,return=minimal"
       },
       body:JSON.stringify({session_key:key,state:S})
     });
+    if(!res.ok){const t=await res.text();console.warn("Supabase save:",res.status,t);}
   }catch(e){console.warn("Supabase save failed:",e);}
 }
 
@@ -1297,7 +1315,6 @@ function toast(msg){const el=document.createElement("div");el.className="toast";
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 
 // Show loading state while fetching from Supabase
-document.getElementById("stage").innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text3);font-size:14px"><div style="width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite"></div>Loading from cloud…</div>`;
 const spinStyle=document.createElement("style");
 spinStyle.textContent="@keyframes spin{to{transform:rotate(360deg)}}";
 document.head.appendChild(spinStyle);
